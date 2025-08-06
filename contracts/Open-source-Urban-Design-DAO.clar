@@ -5,6 +5,7 @@
 (define-constant ERR-PROPOSAL-EXPIRED (err u104))
 (define-constant ERR-INSUFFICIENT-FUNDS (err u105))
 (define-constant ERR-NOT-ACTIVE (err u106))
+(define-constant ERR-INVALID-DELEGATE (err u107))
 
 (define-data-var proposal-count uint u0)
 (define-data-var min-proposal-amount uint u100)
@@ -30,6 +31,8 @@
 )
 
 (define-map user-tokens principal uint)
+
+(define-map delegations principal principal)
 
 (define-public (initialize-token (amount uint))
     (begin
@@ -68,6 +71,21 @@
     )
 )
 
+(define-public (delegate-vote (delegate principal))
+    (begin
+        (asserts! (not (is-eq delegate tx-sender)) ERR-INVALID-DELEGATE)
+        (map-set delegations tx-sender delegate)
+        (ok true)
+    )
+)
+
+(define-public (undelegate-vote)
+    (begin
+        (map-delete delegations tx-sender)
+        (ok true)
+    )
+)
+
 (define-public (vote (proposal-id uint))
     (let
         (
@@ -85,6 +103,29 @@
         )
         (map-set votes {proposal-id: proposal-id, voter: tx-sender} true)
         (map-set user-tokens tx-sender (- user-balance u1))
+        (ok true)
+    )
+)
+
+(define-public (vote-as-delegate (proposal-id uint) (delegator principal))
+    (let
+        (
+            (proposal (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
+            (has-voted (default-to false (map-get? votes {proposal-id: proposal-id, voter: delegator})))
+            (user-balance (default-to u0 (map-get? user-tokens delegator)))
+            (delegate-address (default-to tx-sender (map-get? delegations delegator)))
+        )
+        (asserts! (is-eq delegate-address tx-sender) ERR-NOT-AUTHORIZED)
+        (asserts! (not has-voted) ERR-ALREADY-VOTED)
+        (asserts! (> user-balance u0) ERR-INSUFFICIENT-FUNDS)
+        (asserts! (< burn-block-height (get deadline proposal)) ERR-PROPOSAL-EXPIRED)
+        (asserts! (is-eq (get status proposal) "active") ERR-NOT-ACTIVE)
+        
+        (map-set proposals proposal-id 
+            (merge proposal {votes: (+ (get votes proposal) u1)})
+        )
+        (map-set votes {proposal-id: proposal-id, voter: delegator} true)
+        (map-set user-tokens delegator (- user-balance u1))
         (ok true)
     )
 )
@@ -131,3 +172,8 @@
 (define-read-only (get-user-balance (user principal))
     (ok (default-to u0 (map-get? user-tokens user)))
 )
+
+(define-read-only (get-delegate (user principal))
+    (ok (map-get? delegations user))
+)
+
