@@ -164,6 +164,20 @@
         )
     )
 )
+(define-public (donate-to-proposal (proposal-id uint) (amount uint))
+    (let
+        (
+            (proposal (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
+        )
+        (asserts! (> amount u0) ERR-INSUFFICIENT-FUNDS)
+        (asserts! (is-eq (get status proposal) "active") ERR-NOT-ACTIVE)
+        (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+        (map-set proposals proposal-id
+            (merge proposal {budget: (+ (get budget proposal) amount)})
+        )
+        (ok true)
+    )
+)
 
 (define-read-only (get-proposal (proposal-id uint))
     (ok (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
