@@ -6,10 +6,13 @@
 (define-constant ERR-INSUFFICIENT-FUNDS (err u105))
 (define-constant ERR-NOT-ACTIVE (err u106))
 (define-constant ERR-INVALID-DELEGATE (err u107))
+(define-constant ERR-PROPOSAL-NOT-ELIGIBLE (err u108))
 
 (define-data-var proposal-count uint u0)
 (define-data-var min-proposal-amount uint u100)
 (define-data-var voting-period uint u1440)
+(define-data-var extension-fee uint u50)
+(define-data-var min-votes-for-extension uint u5)
 
 (define-map proposals 
     uint 
@@ -174,6 +177,22 @@
         (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
         (map-set proposals proposal-id
             (merge proposal {budget: (+ (get budget proposal) amount)})
+        )
+        (ok true)
+    )
+)
+
+(define-public (extend-proposal-deadline (proposal-id uint))
+    (let
+        (
+            (proposal (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
+        )
+        (asserts! (is-eq (get status proposal) "active") ERR-NOT-ACTIVE)
+        (asserts! (< burn-block-height (get deadline proposal)) ERR-PROPOSAL-EXPIRED)
+        (asserts! (< (get votes proposal) (var-get min-votes-for-extension)) ERR-PROPOSAL-NOT-ELIGIBLE)
+        (try! (stx-transfer? (var-get extension-fee) tx-sender (as-contract tx-sender)))
+        (map-set proposals proposal-id
+            (merge proposal {deadline: (+ (get deadline proposal) (var-get voting-period))})
         )
         (ok true)
     )
