@@ -198,6 +198,20 @@
     )
 )
 
+(define-public (cancel-proposal (proposal-id uint))
+    (let
+        (
+            (proposal (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
+        )
+        (asserts! (is-eq (get creator proposal) tx-sender) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq (get status proposal) "active") ERR-NOT-ACTIVE)
+        (asserts! (< burn-block-height (get deadline proposal)) ERR-PROPOSAL-EXPIRED)
+        (try! (stx-transfer? (get budget proposal) (as-contract tx-sender) (get creator proposal)))
+        (map-set proposals proposal-id (merge proposal {status: "cancelled"}))
+        (ok true)
+    )
+)
+
 (define-read-only (get-proposal (proposal-id uint))
     (ok (unwrap! (map-get? proposals proposal-id) ERR-NO-PROPOSAL))
 )
